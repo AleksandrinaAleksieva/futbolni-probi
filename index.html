@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Футболни проби — Профили</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#0e1712;
+    --surface:#152019;
+    --surface-2:#1b2921;
+    --surface-3:#213328;
+    --line: rgba(242,240,232,0.09);
+    --line-strong: rgba(242,240,232,0.16);
+    --gold:#c9a227;
+    --gold-soft:#e6c766;
+    --crest:#b23a2e;
+    --crest-soft:#d15b4c;
+    --pitch:#2f6e4e;
+    --pitch-light:#4c8b68;
+    --text:#f2f0e8;
+    --text-muted:#93a79a;
+    --text-dim:#66786d;
+    --danger:#c0453a;
+    --radius-s:3px;
+    --radius-m:6px;
+    --shadow: 0 12px 32px rgba(0,0,0,0.35);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(47,110,78,0.35), transparent 60%),
+      radial-gradient(ellipse 700px 500px at 110% 10%, rgba(178,58,46,0.18), transparent 55%),
+      var(--ink);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+    line-height:1.45;
+  }
+  h1,h2,h3,.display{
+    font-family:'Oswald',sans-serif;
+    font-weight:600;
+    letter-spacing:0.01em;
+    margin:0;
+  }
+  ::selection{ background:var(--gold); color:#1a1206; }
+  button{ font-family:inherit; }
+  a{ color:var(--gold-soft); }
+
+  /* ---------- App shell ---------- */
+  .wrap{ max-width:1180px; margin:0 auto; padding:0 24px 80px; }
+  header.top{
+    position:sticky; top:0; z-index:30;
+    background:linear-gradient(180deg, rgba(14,23,18,0.97), rgba(14,23,18,0.9));
+    backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--line);
+  }
+  .top-inner{
+    max-width:1180px; margin:0 auto; padding:16px 24px;
+    display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+  }
+  .brand{ display:flex; align-items:center; gap:14px; margin-right:auto; }
+  .crest-badge{
+    width:46px; height:46px; flex:none;
+    background:
+      linear-gradient(160deg, var(--crest), #7c261d);
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    display:flex; align-items:center; justify-content:center;
+    box-shadow: inset 0 0 0 1px rgba(230,199,102,0.5), 0 6px 14px rgba(178,58,46,0.35);
+  }
+  .crest-badge svg{ width:24px; height:24px; }
+  .brand-text h1{ font-size:19px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text); }
+  .brand-text p{ margin:1px 0 0; font-size:11.5px; color:var(--gold-soft); letter-spacing:0.05em; text-transform:uppercase; font-family:'Oswald',sans-serif; }
+
+  nav.tabs{ display:flex; gap:4px; background:var(--surface); padding:4px; border-radius:var(--radius-m); border:1px solid var(--line); }
+  nav.tabs button{
+    border:none; background:transparent; color:var(--text-muted);
+    padding:9px 16px; font-size:13.5px; font-family:'Oswald',sans-serif;
+    text-transform:uppercase; letter-spacing:0.04em; cursor:pointer;
+    border-radius:4px; transition:color .15s ease, background .15s ease;
+  }
+  nav.tabs button:hover{ color:var(--text); }
+  nav.tabs button.active{ background:var(--pitch); color:#eafff0; box-shadow: inset 0 0 0 1px rgba(230,199,102,0.35); }
+
+  main{ padding-top:32px; }
+  .view{ display:none; animation: fadein .25s ease; }
+  .view.active{ display:block; }
+  @keyframes fadein{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
+
+  .page-head{ margin-bottom:24px; display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+  .page-head h2{ font-size:26px; text-transform:uppercase; }
+  .page-head .sub{ color:var(--text-muted); font-size:13.5px; margin-top:4px; }
+  .count-pill{
+    font-family:'Oswald',sans-serif; background:var(--surface-2); border:1px solid var(--line-strong);
+    padding:6px 14px; border-radius:20px; font-size:13px; color:var(--gold-soft); letter-spacing:.03em;
+  }
+
+  .card{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-m); }
+
+  /* ---------- Home / form ---------- */
+  .form-grid{ display:grid; grid-template-columns: 250px 1fr; gap:28px; }
+  @media (max-width: 760px){ .form-grid{ grid-template-columns:1fr; } }
+
+  .photo-card{ padding:22px; text-align:center; }
+  .photo-drop{
+    width:100%; aspect-ratio:1/1; border-radius:var(--radius-m);
+    border:1.5px dashed var(--line-strong);
+    background:var(--surface-2);
+    display:flex; align-items:center; justify-content:center; flex-direction:column; gap:8px;
+    cursor:pointer; overflow:hidden; position:relative; color:var(--text-dim);
+    transition:border-color .15s ease;
+  }
+  .photo-drop:hover{ border-color:var(--gold); }
+  .photo-drop img{ width:100%; height:100%; object-fit:cover; }
+  .photo-drop .icon{ width:34px; height:34px; opacity:.7; }
+  .photo-drop span{ font-size:12px; padding:0 20px; }
+  .photo-card .hint{ margin-top:12px; font-size:11.5px; color:var(--text-dim); }
+  .photo-card input[type=file]{ display:none; }
+
+  .field-panel{ padding:26px 28px; }
+  .name-row{ display:flex; align-items:flex-end; gap:16px; margin-bottom:22px; }
+  .name-row .field{ flex:1; }
+  .name-row label .req{ color:var(--crest-soft); }
+
+  .fields-grid{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:18px 20px; }
+  @media (max-width:640px){ .fields-grid{ grid-template-columns:1fr 1fr; } }
+  .field{ display:flex; flex-direction:column; gap:6px; }
+  .field.span2{ grid-column: span 2; }
+  .field.span3{ grid-column: span 3; }
+  @media (max-width:640px){ .field.span3{ grid-column: span 2; } }
+  .field label{ font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); font-family:'Oswald',sans-serif; }
+  .field .desc{ font-size:11px; color:var(--text-dim); margin-top:-3px; }
+  input[type=text], input[type=number], input[type=tel], select, textarea{
+    background:var(--surface-2); border:1px solid var(--line-strong); color:var(--text);
+    padding:10px 12px; border-radius:var(--radius-s); font-size:14px; font-family:inherit;
+    outline:none; transition:border-color .15s ease, background .15s ease; width:100%;
+  }
+  input::placeholder, textarea::placeholder{ color:var(--text-dim); }
+  input:focus, select:focus, textarea:focus{ border-color:var(--gold); background:var(--surface-3); }
+  textarea{ resize:vertical; min-height:76px; line-height:1.5; }
+  select{ appearance:none; -webkit-appearance:none; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%2393a79a'/></svg>"); background-repeat:no-repeat; background-position:right 12px center; padding-right:30px; }
+
+  .editor-chooser{ display:flex; flex-wrap:wrap; gap:8px; }
+  .chip-toggle{
+    padding:7px 13px; border-radius:20px; border:1px solid var(--line-strong); background:var(--surface-2);
+    color:var(--text-muted); font-size:12.5px; cursor:pointer; user-select:none; transition:all .12s ease;
+  }
+  .chip-toggle.on{ background:var(--pitch); border-color:var(--pitch-light); color:#eafff0; }
+  .chip-add{ display:flex; gap:6px; align-items:center; }
+  .chip-add input{ width:140px; padding:6px 10px; font-size:12.5px; }
+  .chip-add button{ background:var(--surface-3); border:1px solid var(--line-strong); color:var(--gold-soft); border-radius:20px; padding:6px 12px; font-size:12.5px; cursor:pointer; }
+
+  .form-actions{ margin-top:26px; display:flex; justify-content:flex-end; align-items:center; gap:14px; }
+  .status-msg{ font-size:12.5px; color:var(--pitch-light); }
+  .btn-primary{
+    background:linear-gradient(160deg, var(--gold-soft), var(--gold));
+    color:#1a1206; border:none; font-family:'Oswald',sans-serif; text-transform:uppercase;
+    letter-spacing:.05em; font-size:14.5px; padding:13px 26px; border-radius:var(--radius-s);
+    cursor:pointer; box-shadow:0 10px 20px rgba(201,162,39,0.25); transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .btn-primary:hover{ transform:translateY(-1px); box-shadow:0 14px 24px rgba(201,162,39,0.32); }
+  .btn-primary:active{ transform:translateY(0); }
+  .btn-ghost{
+    background:transparent; border:1px solid var(--line-strong); color:var(--text-muted);
+    font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.05em; font-size:13px;
+    padding:12px 20px; border-radius:var(--radius-s); cursor:pointer;
+  }
+  .btn-ghost:hover{ color:var(--text); border-color:var(--gold); }
+
+  /* ---------- Table view ---------- */
+  .filter-bar{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; padding:16px 18px; margin-bottom:16px; }
+  .filter-bar .search{ position:relative; flex:1; min-width:180px; }
+  .filter-bar .search input{ padding-left:34px; }
+  .filter-bar .search svg{ position:absolute; left:11px; top:50%; transform:translateY(-50%); width:14px; height:14px; opacity:.5; }
+  .filter-bar select{ width:auto; min-width:130px; }
+  .filter-bar .clear-link{ font-size:12.5px; color:var(--text-dim); cursor:pointer; text-decoration:underline; white-space:nowrap; }
+  .filter-bar .clear-link:hover{ color:var(--gold-soft); }
+
+  .table-scroll{ overflow-x:auto; }
+  table.roster{ width:100%; border-collapse:collapse; min-width:760px; }
+  table.roster thead th{
+    text-align:left; font-family:'Oswald',sans-serif; text-transform:uppercase; font-size:11.5px;
+    letter-spacing:.05em; color:var(--text-dim); padding:12px 14px; border-bottom:1px solid var(--line-strong);
+    cursor:pointer; white-space:nowrap; user-select:none;
+  }
+  table.roster thead th:hover{ color:var(--gold-soft); }
+  table.roster thead th .arrow{ margin-left:4px; opacity:.6; font-size:10px; }
+  table.roster tbody tr{ border-bottom:1px solid var(--line); cursor:pointer; transition:background .1s ease; }
+  table.roster tbody tr:hover{ background:var(--surface-2); }
+  table.roster td{ padding:10px 14px; font-size:13.5px; vertical-align:middle; }
+  .cell-name{ display:flex; align-items:center; gap:10px; font-weight:600; }
+  .avatar{ width:34px; height:34px; border-radius:50%; object-fit:cover; flex:none; background:var(--surface-3); border:1px solid var(--line-strong); }
+  .avatar.placeholder{ display:flex; align-items:center; justify-content:center; font-family:'Oswald',sans-serif; color:var(--text-dim); font-size:13px; }
+  .badge-group{
+    display:inline-block; padding:3px 9px; border-radius:20px; font-size:11.5px; font-family:'Oswald',sans-serif;
+    letter-spacing:.03em; border:1px solid var(--line-strong);
+  }
+  .g1{ color:#8fd6b0; background:rgba(76,139,104,0.16); }
+  .g2{ color:var(--gold-soft); background:rgba(201,162,39,0.14); }
+  .g3{ color:#e29a86; background:rgba(178,58,46,0.14); }
+  .g4{ color:#9cc0f5; background:rgba(90,130,200,0.14); }
+  .editor-tags{ display:flex; flex-wrap:wrap; gap:5px; }
+  .editor-tags span{ background:var(--surface-3); padding:2px 8px; border-radius:12px; font-size:11px; color:var(--text-muted); }
+  .row-actions{ display:flex; gap:8px; }
+  .icon-btn{ background:none; border:none; color:var(--text-dim); cursor:pointer; padding:4px; border-radius:4px; }
+  .icon-btn:hover{ color:var(--gold-soft); background:var(--surface-3); }
+  .icon-btn.danger:hover{ color:var(--danger); }
+  .empty-state{ padding:60px 20px; text-align:center; color:var(--text-dim); }
+  .empty-state .display{ font-size:18px; color:var(--text-muted); margin-bottom:6px; text-transform:uppercase; }
+
+  /* ---------- Dashboard ---------- */
+  .stat-row{ display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+  @media (max-width:760px){ .stat-row{ grid-template-columns:1fr 1fr; } }
+  .stat-tile{ padding:20px 22px; }
+  .stat-tile .num{ font-family:'Oswald',sans-serif; font-size:34px; color:var(--gold-soft); line-height:1; }
+  .stat-tile .lbl{ margin-top:8px; font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em; }
+
+  .donut-row{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  @media (max-width:900px){ .donut-row{ grid-template-columns:1fr; } }
+  .donut-card{ padding:22px; }
+  .donut-card h3{ font-size:14px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); margin-bottom:16px; }
+  .donut-body{ display:flex; align-items:center; gap:18px; }
+  .legend{ display:flex; flex-direction:column; gap:8px; font-size:12.5px; flex:1; }
+  .legend .row{ display:flex; align-items:center; gap:8px; justify-content:space-between; }
+  .legend .row .lab{ display:flex; align-items:center; gap:8px; color:var(--text-muted); }
+  .legend .swatch{ width:9px; height:9px; border-radius:2px; flex:none; }
+  .legend .val{ color:var(--text); font-family:'Oswald',sans-serif; }
+
+  /* ---------- Modal ---------- */
+  .modal-overlay{ position:fixed; inset:0; background:rgba(6,10,8,0.72); backdrop-filter:blur(3px); display:none; align-items:flex-start; justify-content:center; z-index:100; padding:40px 20px; overflow-y:auto; }
+  .modal-overlay.active{ display:flex; }
+  .modal{ background:var(--surface); border:1px solid var(--line-strong); border-radius:var(--radius-m); width:100%; max-width:720px; box-shadow:var(--shadow); }
+  .modal-head{ display:flex; align-items:center; justify-content:space-between; padding:18px 24px; border-bottom:1px solid var(--line); }
+  .modal-head h3{ font-size:18px; text-transform:uppercase; }
+  .modal-head button{ background:none; border:none; color:var(--text-dim); font-size:20px; cursor:pointer; line-height:1; }
+  .modal-body{ padding:24px; }
+  .modal-foot{ padding:16px 24px; border-top:1px solid var(--line); display:flex; justify-content:space-between; gap:12px; }
+
+  .toast{
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); opacity:0;
+    background:var(--pitch); color:#eafff0; padding:12px 22px; border-radius:6px; font-size:13.5px;
+    box-shadow:var(--shadow); transition:opacity .25s ease, transform .25s ease; z-index:200; pointer-events:none;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  .visually-hidden{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+  @media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important; } }
+
+  /* ---------- Login gate ---------- */
+  #loginGate{
+    position:fixed; inset:0; z-index:500; display:flex; align-items:center; justify-content:center;
+    background:
+      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(47,110,78,0.35), transparent 60%),
+      radial-gradient(ellipse 700px 500px at 110% 10%, rgba(178,58,46,0.18), transparent 55%),
+      var(--ink);
+    padding:20px;
+  }
+  #loginGate .card{ width:100%; max-width:360px; padding:32px 28px; text-align:center; }
+  #loginGate .crest-badge{ margin:0 auto 18px; }
+  #loginGate h2{ font-size:20px; text-transform:uppercase; margin-bottom:4px; }
+  #loginGate p.sub{ color:var(--text-muted); font-size:13px; margin-bottom:22px; }
+  #loginGate input{ text-align:center; margin-bottom:12px; }
+  #loginGate .btn-primary{ width:100%; }
+  #loginGate .err{ color:var(--danger); font-size:12.5px; margin-top:10px; min-height:16px; }
+  #appRoot{ display:none; }
+  #appRoot.ready{ display:block; }
+  .logout-link{ font-size:12px; color:var(--text-dim); cursor:pointer; text-decoration:underline; white-space:nowrap; }
+  .logout-link:hover{ color:var(--gold-soft); }
+  .export-btn{
+    background:var(--surface-2); border:1px solid var(--line-strong); color:var(--gold-soft);
+    font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.04em; font-size:12.5px;
+    padding:9px 16px; border-radius:var(--radius-s); cursor:pointer; display:inline-flex; align-items:center; gap:7px;
+  }
+  .export-btn:hover{ border-color:var(--gold); }
+  .sync-dot{ width:7px; height:7px; border-radius:50%; background:var(--pitch-light); display:inline-block; margin-right:6px; box-shadow:0 0 0 3px rgba(76,139,104,0.2); }
+</style>
+</head>
+<body>
+
+<div id="loginGate">
+  <div class="card">
+    <div class="crest-badge"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.5 5 5.5.7-4 4 1 5.5L12 14.8 7 17.2l1-5.5-4-4L9.5 7 12 2z" fill="#f4e6b0"/></svg></div>
+    <h2>Футболни проби</h2>
+    <p class="sub">Вход за редактори</p>
+    <input type="email" id="loginEmail" placeholder="Имейл" autocomplete="username">
+    <input type="password" id="loginPassword" placeholder="Парола" autocomplete="current-password">
+    <button class="btn-primary" id="loginBtn">Влез</button>
+    <div class="err" id="loginErr"></div>
+  </div>
+</div>
+
+<div id="appRoot">
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <div class="crest-badge">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.5 5 5.5.7-4 4 1 5.5L12 14.8 7 17.2l1-5.5-4-4L9.5 7 12 2z" fill="#f4e6b0"/></svg>
+      </div>
+      <div class="brand-text">
+        <h1>Футболни проби</h1>
+        <p>Денят, който промени живота ми</p>
+      </div>
+    </div>
+    <nav class="tabs">
+      <button data-view="home" class="active">Начало</button>
+      <button data-view="table">Съществуващи</button>
+      <button data-view="dashboard">Табло</button>
+    </nav>
+    <div style="display:flex; align-items:center; gap:14px;">
+      <span class="logout-link" id="syncStatus" title="Свързано с базата"><span class="sync-dot"></span>Синхронизирано</span>
+      <span class="logout-link" id="currentUserLabel" style="text-decoration:none; cursor:default;"></span>
+      <span class="logout-link" id="logoutBtn">Изход</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- HOME / NEW PROFILE -->
+  <section id="view-home" class="view active">
+    <div class="page-head">
+      <div>
+        <h2>Нов профил</h2>
+        <div class="sub">Попълни данните на участника от пробите</div>
+      </div>
+    </div>
+
+    <div class="form-grid">
+      <div class="card photo-card">
+        <label class="photo-drop" id="photoDrop">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M8 6l1.4-2h5.2L16 6"/></svg>
+          <span>Качи снимка от кастинга</span>
+          <input type="file" id="photoInput" accept="image/*">
+        </label>
+        <div class="hint">Квадратна снимка, лице ясно видимо</div>
+      </div>
+
+      <div class="card field-panel">
+        <div class="name-row">
+          <div class="field" style="flex:1">
+            <label>Име <span class="req">*</span></label>
+            <input type="text" id="f-name" placeholder="Име и фамилия">
+          </div>
+          <div class="field" style="width:150px">
+            <label>Възраст</label>
+            <input type="number" id="f-age" min="5" max="25" placeholder="напр. 12">
+          </div>
+        </div>
+
+        <div class="fields-grid">
+          <div class="field">
+            <label>Град</label>
+            <input type="text" id="f-city" placeholder="Град от кастинга">
+            <div class="desc">Град от кастинга, а не местоживеене</div>
+          </div>
+          <div class="field">
+            <label>Група</label>
+            <select id="f-group">
+              <option value="">Избери група</option>
+              <option value="1">Група 1 · 8–10 г.</option>
+              <option value="2">Група 2 · 11–13 г.</option>
+              <option value="3">Група 3 · 14–16 г.</option>
+              <option value="4">Група 4 · 17–20 г.</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Телефон</label>
+            <input type="tel" id="f-phone" placeholder="08xx xxx xxx">
+          </div>
+
+          <div class="field span3">
+            <label>Редактор</label>
+            <div class="editor-chooser" id="editorChooser"></div>
+            <div class="chip-add">
+              <input type="text" id="newEditorInput" placeholder="Добави редактор">
+              <button type="button" id="addEditorBtn">+ Добави</button>
+            </div>
+          </div>
+
+          <div class="field span3">
+            <label>Действия</label>
+            <textarea id="f-actions" placeholder="Задачи за редактора"></textarea>
+          </div>
+
+          <div class="field span3">
+            <label>Бележки</label>
+            <textarea id="f-notes" placeholder="Архетип, сюжетна линия, особености и интересни факти за участника"></textarea>
+          </div>
+
+          <div class="field span3">
+            <label>Резултати</label>
+            <textarea id="f-results" placeholder="Резултат на участника от кастинга"></textarea>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <span class="status-msg" id="formStatus"></span>
+          <button type="button" class="btn-ghost" id="clearFormBtn">Изчисти</button>
+          <button type="button" class="btn-primary" id="saveBtn">Запази профил</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TABLE VIEW -->
+  <section id="view-table" class="view">
+    <div class="page-head">
+      <div>
+        <h2>Съществуващи участници</h2>
+        <div class="sub">Пълен списък с филтри и сортиране</div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <button class="export-btn" id="exportBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+          Експорт в Excel
+        </button>
+        <div class="count-pill" id="tableCount">0 участници</div>
+      </div>
+    </div>
+
+    <div class="card filter-bar">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input type="text" id="searchInput" placeholder="Търси по име...">
+      </div>
+      <select id="filterGroup"><option value="">Всички групи</option><option value="1">Група 1</option><option value="2">Група 2</option><option value="3">Група 3</option><option value="4">Група 4</option></select>
+      <select id="filterEditor"><option value="">Всички редактори</option></select>
+      <select id="filterCity"><option value="">Всички градове</option></select>
+      <span class="clear-link" id="clearFilters">Изчисти филтрите</span>
+    </div>
+
+    <div class="card table-scroll">
+      <table class="roster">
+        <thead>
+          <tr>
+            <th data-sort="name">Име <span class="arrow"></span></th>
+            <th data-sort="age">Възраст <span class="arrow"></span></th>
+            <th data-sort="city">Град <span class="arrow"></span></th>
+            <th data-sort="group">Група <span class="arrow"></span></th>
+            <th>Редактор</th>
+            <th data-sort="phone">Телефон <span class="arrow"></span></th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="rosterBody"></tbody>
+      </table>
+      <div class="empty-state" id="emptyState" style="display:none;">
+        <div class="display">Все още няма записани участници</div>
+        <div>Добави първия профил от раздел "Начало"</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DASHBOARD -->
+  <section id="view-dashboard" class="view">
+    <div class="page-head">
+      <div>
+        <h2>Табло</h2>
+        <div class="sub">Обобщена статистика на пробите</div>
+      </div>
+    </div>
+
+    <div class="stat-row" id="statRow"></div>
+
+    <div class="donut-row">
+      <div class="card donut-card">
+        <h3>По групи</h3>
+        <div class="donut-body" id="donutGroup"></div>
+      </div>
+      <div class="card donut-card">
+        <h3>По редактори</h3>
+        <div class="donut-body" id="donutEditor"></div>
+      </div>
+      <div class="card donut-card">
+        <h3>По градове</h3>
+        <div class="donut-body" id="donutCity"></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- MODAL for view/edit -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="modalTitle">Профил</h3>
+      <button id="modalClose">&times;</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-foot">
+      <button class="btn-ghost" id="modalDelete" style="color:var(--danger); border-color:var(--danger);">Изтрий профила</button>
+      <button class="btn-primary" id="modalSave">Запази промените</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+</div><!-- /#appRoot -->
+
+<script>
+(function(){
+  // =================================================================
+  // FIREBASE CONFIG — replace these placeholder values with the ones
+  // from your Firebase project (Project settings > General > Your apps).
+  // See the setup instructions provided alongside this file.
+  // =================================================================
+  const firebaseConfig = {
+    apiKey: "AIzaSyD5uXDGSToaaTT0mHhez3Jm9DVv7WD2tz0",
+    authDomain: "futbolni-probi.firebaseapp.com",
+    projectId: "futbolni-probi",
+    storageBucket: "futbolni-probi.firebasestorage.app",
+    messagingSenderId: "983160846619",
+    appId: "1:983160846619:web:79df1134b1fb7c3b133bbe"
+  };
+  // =================================================================
+
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+  // Note: photos are stored directly inside each Firestore document as a
+  // compressed base64 image — Cloud Storage is intentionally not used here
+  // since Firebase now requires the paid Blaze plan for Storage buckets.
+
+  const GROUPS = {
+    '1': {label:'Група 1', range:'8–10 г.', cls:'g1'},
+    '2': {label:'Група 2', range:'11–13 г.', cls:'g2'},
+    '3': {label:'Група 3', range:'14–16 г.', cls:'g3'},
+    '4': {label:'Група 4', range:'17–20 г.', cls:'g4'},
+  };
+  const CHART_COLORS = ['#c9a227','#b23a2e','#4c8b68','#5a82c8','#8b5e34','#9c6fa8','#3d9a9c','#c46a3a'];
+
+  let participants = [];
+  let editors = [];
+  let currentPhotoDataUrl = null;
+  let currentPhotoBlob = null;
+  let sortKey = 'name';
+  let sortDir = 1;
+  let modalId = null;
+  let modalPhotoDataUrl = null;
+  let modalPhotoBlob = null;
+  let unsubParticipants = null;
+  let unsubEditors = null;
+
+  const $ = (sel, root) => (root||document).querySelector(sel);
+  const $$ = (sel, root) => Array.from((root||document).querySelectorAll(sel));
+
+  function toast(msg){
+    const t = $('#toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(()=> t.classList.remove('show'), 2200);
+  }
+  function setSyncStatus(ok){
+    const el = $('#syncStatus');
+    if(!el) return;
+    el.querySelector('.sync-dot').style.background = ok ? 'var(--pitch-light)' : 'var(--danger)';
+    el.lastChild ? (el.childNodes[el.childNodes.length-1].textContent = ok ? 'Синхронизирано' : 'Няма връзка') : null;
+  }
+
+  function escapeHtml(s){
+    return String(s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  // ---------- Auth / login gate ----------
+  auth.onAuthStateChanged(function(user){
+    if(user){
+      $('#loginGate').style.display = 'none';
+      $('#appRoot').classList.add('ready');
+      $('#currentUserLabel').textContent = user.email || '';
+      attachListeners();
+    }else{
+      $('#loginGate').style.display = 'flex';
+      $('#appRoot').classList.remove('ready');
+      if(unsubParticipants) unsubParticipants();
+      if(unsubEditors) unsubEditors();
+    }
+  });
+
+  $('#loginBtn').addEventListener('click', doLogin);
+  $('#loginEmail').addEventListener('keydown', function(e){ if(e.key === 'Enter') $('#loginPassword').focus(); });
+  $('#loginPassword').addEventListener('keydown', function(e){ if(e.key === 'Enter') doLogin(); });
+  function doLogin(){
+    const email = $('#loginEmail').value.trim();
+    const pass = $('#loginPassword').value;
+    const errEl = $('#loginErr');
+    errEl.textContent = '';
+    if(!email || !pass){ errEl.textContent = 'Въведи имейл и парола'; return; }
+    $('#loginBtn').disabled = true;
+    $('#loginBtn').textContent = 'Проверка...';
+    auth.signInWithEmailAndPassword(email, pass)
+      .catch(function(err){
+        errEl.textContent = 'Грешен имейл или парола';
+        console.error(err);
+      })
+      .finally(function(){
+        $('#loginBtn').disabled = false;
+        $('#loginBtn').textContent = 'Влез';
+      });
+  }
+  $('#logoutBtn').addEventListener('click', function(){
+    auth.signOut();
+    $('#loginPassword').value = '';
+  });
+
+  // ---------- Realtime listeners ----------
+  function attachListeners(){
+    unsubParticipants = db.collection('participants').orderBy('createdAt', 'desc')
+      .onSnapshot(function(snap){
+        participants = snap.docs.map(d => Object.assign({id: d.id}, d.data()));
+        setSyncStatus(true);
+        renderFilterOptions();
+        renderTable();
+        renderDashboard();
+      }, function(err){
+        console.error(err);
+        setSyncStatus(false);
+        toast('Грешка при връзка с базата данни');
+      });
+
+    unsubEditors = db.collection('meta').doc('editors')
+      .onSnapshot(function(doc){
+        editors = (doc.exists && doc.data().names) ? doc.data().names : [];
+        renderEditorChooser();
+        renderFilterOptions();
+      }, function(err){ console.error(err); });
+  }
+
+  // ---------- Photo handling ----------
+  function readAndCompress(file, cb){
+    const reader = new FileReader();
+    reader.onload = function(e){
+      const img = new Image();
+      img.onload = function(){
+        const max = 480;
+        let w = img.width, h = img.height;
+        if(w > h){ if(w > max){ h = h * max / w; w = max; } }
+        else{ if(h > max){ w = w * max / h; h = max; } }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        canvas.toBlob(function(blob){ cb(dataUrl, blob); }, 'image/jpeg', 0.8);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  $('#photoInput').addEventListener('change', function(e){
+    const file = e.target.files[0];
+    if(!file) return;
+    readAndCompress(file, function(dataUrl, blob){
+      currentPhotoDataUrl = dataUrl;
+      currentPhotoBlob = blob;
+      $('#photoDrop').innerHTML = '<img src="'+dataUrl+'" alt="Снимка на участника">';
+    });
+  });
+
+  // ---------- Editor chooser (home form) ----------
+  let selectedEditors = new Set();
+  function renderEditorChooser(){
+    const box = $('#editorChooser');
+    box.innerHTML = '';
+    if(editors.length === 0){
+      box.innerHTML = '<span style="color:var(--text-dim); font-size:12.5px;">Няма добавени редактори — добави отдолу</span>';
+    }
+    editors.forEach(name=>{
+      const chip = document.createElement('div');
+      chip.className = 'chip-toggle' + (selectedEditors.has(name) ? ' on' : '');
+      chip.textContent = name;
+      chip.onclick = function(){
+        if(selectedEditors.has(name)) selectedEditors.delete(name); else selectedEditors.add(name);
+        renderEditorChooser();
+      };
+      box.appendChild(chip);
+    });
+  }
+  $('#addEditorBtn').addEventListener('click', async function(){
+    const input = $('#newEditorInput');
+    const name = input.value.trim();
+    if(!name) return;
+    if(!editors.includes(name)){
+      try{
+        await db.collection('meta').doc('editors').set(
+          {names: firebase.firestore.FieldValue.arrayUnion(name)}, {merge:true}
+        );
+      }catch(e){ console.error(e); toast('Грешка при добавяне на редактор'); return; }
+    }
+    selectedEditors.add(name);
+    input.value = '';
+  });
+  $('#newEditorInput').addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){ e.preventDefault(); $('#addEditorBtn').click(); }
+  });
+
+  // ---------- Save new profile ----------
+  function resetForm(){
+    $('#f-name').value = '';
+    $('#f-age').value = '';
+    $('#f-city').value = '';
+    $('#f-group').value = '';
+    $('#f-phone').value = '';
+    $('#f-actions').value = '';
+    $('#f-notes').value = '';
+    $('#f-results').value = '';
+    currentPhotoDataUrl = null;
+    currentPhotoBlob = null;
+    selectedEditors = new Set();
+    $('#photoDrop').innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M8 6l1.4-2h5.2L16 6"/></svg><span>Качи снимка от кастинга</span><input type="file" id="photoInput" accept="image/*">';
+    $('#photoInput').addEventListener('change', function(e){
+      const file = e.target.files[0];
+      if(!file) return;
+      readAndCompress(file, function(dataUrl, blob){
+        currentPhotoDataUrl = dataUrl;
+        currentPhotoBlob = blob;
+        $('#photoDrop').innerHTML = '<img src="'+dataUrl+'" alt="Снимка на участника">';
+      });
+    });
+    renderEditorChooser();
+  }
+
+  $('#clearFormBtn').addEventListener('click', resetForm);
+
+  $('#saveBtn').addEventListener('click', async function(){
+    const name = $('#f-name').value.trim();
+    const status = $('#formStatus');
+    if(!name){
+      status.textContent = 'Името е задължително';
+      status.style.color = 'var(--danger)';
+      $('#f-name').focus();
+      return;
+    }
+    $('#saveBtn').disabled = true;
+    $('#saveBtn').textContent = 'Записване...';
+    try{
+      await db.collection('participants').add({
+        name: name,
+        age: $('#f-age').value ? Number($('#f-age').value) : null,
+        city: $('#f-city').value.trim(),
+        group: $('#f-group').value,
+        phone: $('#f-phone').value.trim(),
+        editors: Array.from(selectedEditors),
+        actions: $('#f-actions').value.trim(),
+        notes: $('#f-notes').value.trim(),
+        results: $('#f-results').value.trim(),
+        photo: currentPhotoDataUrl || null,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      status.textContent = 'Профилът е запазен ✓';
+      status.style.color = 'var(--pitch-light)';
+      toast('Профилът на "' + name + '" е запазен');
+      resetForm();
+    }catch(e){
+      console.error(e);
+      status.textContent = 'Грешка при запис';
+      status.style.color = 'var(--danger)';
+      toast('Грешка при запис — опитай пак');
+    }
+    $('#saveBtn').disabled = false;
+    $('#saveBtn').textContent = 'Запази профил';
+    setTimeout(()=>{ status.textContent=''; }, 3000);
+  });
+
+  // ---------- Filters / table ----------
+  function renderFilterOptions(){
+    const editorSel = $('#filterEditor');
+    const currentEditorVal = editorSel.value;
+    editorSel.innerHTML = '<option value="">Всички редактори</option>' +
+      editors.map(e=>'<option value="'+escapeHtml(e)+'">'+escapeHtml(e)+'</option>').join('');
+    editorSel.value = currentEditorVal;
+
+    const citySel = $('#filterCity');
+    const currentCityVal = citySel.value;
+    const cities = Array.from(new Set(participants.map(p=>p.city).filter(Boolean))).sort();
+    citySel.innerHTML = '<option value="">Всички градове</option>' +
+      cities.map(c=>'<option value="'+escapeHtml(c)+'">'+escapeHtml(c)+'</option>').join('');
+    citySel.value = currentCityVal;
+  }
+
+  function getFiltered(){
+    const q = $('#searchInput').value.trim().toLowerCase();
+    const g = $('#filterGroup').value;
+    const ed = $('#filterEditor').value;
+    const city = $('#filterCity').value;
+    let list = participants.filter(p=>{
+      if(q && !(p.name||'').toLowerCase().includes(q)) return false;
+      if(g && p.group !== g) return false;
+      if(ed && !(p.editors||[]).includes(ed)) return false;
+      if(city && p.city !== city) return false;
+      return true;
+    });
+    list.sort((a,b)=>{
+      let av = a[sortKey], bv = b[sortKey];
+      if(sortKey === 'age'){ av = av||0; bv = bv||0; }
+      else { av = (av||'').toString().toLowerCase(); bv = (bv||'').toString().toLowerCase(); }
+      if(av < bv) return -1 * sortDir;
+      if(av > bv) return 1 * sortDir;
+      return 0;
+    });
+    return list;
+  }
+
+  function renderTable(){
+    const list = getFiltered();
+    const body = $('#rosterBody');
+    $('#tableCount').textContent = participants.length + (participants.length===1 ? ' участник' : ' участници');
+    $('#emptyState').style.display = list.length ? 'none' : 'block';
+    $('table.roster').style.display = list.length ? '' : 'none';
+    body.innerHTML = list.map(p=>{
+      const g = GROUPS[p.group];
+      const avatar = p.photo
+        ? '<img class="avatar" src="'+p.photo+'" alt="">'
+        : '<div class="avatar placeholder">'+escapeHtml((p.name||'?').charAt(0).toUpperCase())+'</div>';
+      const groupBadge = g ? '<span class="badge-group '+g.cls+'">'+g.label+'</span>' : '<span style="color:var(--text-dim); font-size:12px;">—</span>';
+      const editorTags = (p.editors||[]).length
+        ? '<div class="editor-tags">'+p.editors.map(e=>'<span>'+escapeHtml(e)+'</span>').join('')+'</div>'
+        : '<span style="color:var(--text-dim); font-size:12px;">—</span>';
+      return '<tr data-id="'+p.id+'">'+
+        '<td><div class="cell-name">'+avatar+'<span>'+escapeHtml(p.name)+'</span></div></td>'+
+        '<td>'+(p.age || '—')+'</td>'+
+        '<td>'+(escapeHtml(p.city) || '—')+'</td>'+
+        '<td>'+groupBadge+'</td>'+
+        '<td>'+editorTags+'</td>'+
+        '<td>'+(escapeHtml(p.phone) || '—')+'</td>'+
+        '<td><div class="row-actions">'+
+          '<button class="icon-btn" data-act="view" title="Виж"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></button>'+
+          '<button class="icon-btn danger" data-act="del" title="Изтрий"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>'+
+        '</div></td>'+
+      '</tr>';
+    }).join('');
+
+    $$('#rosterBody tr').forEach(tr=>{
+      tr.addEventListener('click', function(e){
+        const act = e.target.closest('[data-act]');
+        const id = tr.getAttribute('data-id');
+        if(act && act.getAttribute('data-act') === 'del'){
+          e.stopPropagation();
+          if(confirm('Да изтрия ли този профил?')){
+            deleteParticipant(id);
+          }
+          return;
+        }
+        openModal(id);
+      });
+    });
+  }
+
+  async function deleteParticipant(id){
+    try{
+      await db.collection('participants').doc(id).delete();
+      toast('Профилът е изтрит');
+    }catch(e){
+      console.error(e);
+      toast('Грешка при изтриване');
+    }
+  }
+
+  $$('table.roster thead th[data-sort]').forEach(th=>{
+    th.addEventListener('click', function(){
+      const key = th.getAttribute('data-sort');
+      if(sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = 1; }
+      $$('table.roster thead th').forEach(t=> t.querySelector('.arrow') && (t.querySelector('.arrow').textContent=''));
+      th.querySelector('.arrow').textContent = sortDir === 1 ? '▲' : '▼';
+      renderTable();
+    });
+  });
+
+  ['searchInput'].forEach(id => $('#'+id).addEventListener('input', renderTable));
+  ['filterGroup','filterEditor','filterCity'].forEach(id => $('#'+id).addEventListener('change', renderTable));
+  $('#clearFilters').addEventListener('click', function(){
+    $('#searchInput').value = '';
+    $('#filterGroup').value = '';
+    $('#filterEditor').value = '';
+    $('#filterCity').value = '';
+    renderTable();
+  });
+
+  // ---------- Export to Excel ----------
+  $('#exportBtn').addEventListener('click', function(){
+    const list = getFiltered();
+    if(list.length === 0){ toast('Няма данни за експорт'); return; }
+    const rows = list.map(p=>({
+      'Име': p.name || '',
+      'Възраст': p.age || '',
+      'Град': p.city || '',
+      'Група': GROUPS[p.group] ? (GROUPS[p.group].label + ' (' + GROUPS[p.group].range + ')') : '',
+      'Редактор': (p.editors||[]).join(', '),
+      'Телефон': p.phone || '',
+      'Действия': p.actions || '',
+      'Бележки': p.notes || '',
+      'Резултати': p.results || '',
+      'Снимка (URL)': p.photo || '',
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [
+      {wch:20},{wch:9},{wch:16},{wch:20},{wch:20},{wch:14},{wch:30},{wch:34},{wch:30},{wch:40}
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Участници');
+    const stamp = new Date().toISOString().slice(0,10);
+    XLSX.writeFile(wb, 'futbolni-probi-uchastnitsi-' + stamp + '.xlsx');
+    toast('Файлът е изтеглен');
+  });
+
+  // ---------- Modal (view/edit) ----------
+  function openModal(id){
+    const p = participants.find(x=>x.id===id);
+    if(!p) return;
+    modalId = id;
+    modalPhotoDataUrl = p.photo || null;
+    modalPhotoBlob = null;
+    $('#modalTitle').textContent = p.name;
+    const g = p.group || '';
+    $('#modalBody').innerHTML =
+      '<div style="display:flex; gap:18px; margin-bottom:20px;">'+
+        '<label style="cursor:pointer;">'+
+          (p.photo ? '<img id="modalAvatarPreview" src="'+p.photo+'" style="width:84px;height:84px;border-radius:8px;object-fit:cover;border:1px solid var(--line-strong);">'
+                    : '<div id="modalAvatarPreview" style="width:84px;height:84px;border-radius:8px;background:var(--surface-2);border:1px dashed var(--line-strong); display:flex; align-items:center; justify-content:center; color:var(--text-dim); font-size:11px; text-align:center;">Без снимка</div>')+
+          '<input type="file" id="modalPhotoInput" accept="image/*" style="display:none;">'+
+        '</label>'+
+        '<div style="flex:1; display:grid; grid-template-columns:1fr 1fr; gap:10px;">'+
+          '<div class="field"><label>Име</label><input type="text" id="m-name" value="'+escapeHtml(p.name)+'"></div>'+
+          '<div class="field"><label>Възраст</label><input type="number" id="m-age" value="'+(p.age||'')+'"></div>'+
+          '<div class="field"><label>Град</label><input type="text" id="m-city" value="'+escapeHtml(p.city||'')+'"></div>'+
+          '<div class="field"><label>Телефон</label><input type="tel" id="m-phone" value="'+escapeHtml(p.phone||'')+'"></div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="field" style="margin-bottom:14px;"><label>Група</label><select id="m-group">'+
+        '<option value="">Без група</option>'+
+        Object.keys(GROUPS).map(k=>'<option value="'+k+'" '+(g===k?'selected':'')+'>'+GROUPS[k].label+' · '+GROUPS[k].range+'</option>').join('')+
+      '</select></div>'+
+      '<div class="field" style="margin-bottom:14px;"><label>Редактор</label><div class="editor-chooser" id="modalEditorChooser"></div></div>'+
+      '<div class="field" style="margin-bottom:14px;"><label>Действия</label><textarea id="m-actions">'+escapeHtml(p.actions||'')+'</textarea></div>'+
+      '<div class="field" style="margin-bottom:14px;"><label>Бележки</label><textarea id="m-notes">'+escapeHtml(p.notes||'')+'</textarea></div>'+
+      '<div class="field"><label>Резултати</label><textarea id="m-results">'+escapeHtml(p.results||'')+'</textarea></div>';
+
+    let modalSelected = new Set(p.editors||[]);
+    function renderModalEditors(){
+      const box = $('#modalEditorChooser');
+      box.innerHTML = editors.map(name=>{
+        const on = modalSelected.has(name);
+        return '<div class="chip-toggle'+(on?' on':'')+'" data-name="'+escapeHtml(name)+'">'+escapeHtml(name)+'</div>';
+      }).join('') || '<span style="color:var(--text-dim); font-size:12.5px;">Няма редактори</span>';
+      $$('#modalEditorChooser .chip-toggle').forEach(chip=>{
+        chip.onclick = function(){
+          const n = chip.getAttribute('data-name');
+          if(modalSelected.has(n)) modalSelected.delete(n); else modalSelected.add(n);
+          renderModalEditors();
+        };
+      });
+    }
+    renderModalEditors();
+
+    $('#modalAvatarPreview').parentElement.addEventListener('click', ()=> $('#modalPhotoInput').click());
+    $('#modalPhotoInput').addEventListener('change', function(e){
+      const file = e.target.files[0];
+      if(!file) return;
+      readAndCompress(file, function(dataUrl, blob){
+        modalPhotoDataUrl = dataUrl;
+        modalPhotoBlob = blob;
+        document.getElementById('modalAvatarPreview').outerHTML = '<img id="modalAvatarPreview" src="'+dataUrl+'" style="width:84px;height:84px;border-radius:8px;object-fit:cover;border:1px solid var(--line-strong);">';
+      });
+    });
+
+    $('#modalSave').onclick = async function(){
+      $('#modalSave').disabled = true;
+      $('#modalSave').textContent = 'Записване...';
+      try{
+        await db.collection('participants').doc(id).update({
+          name: $('#m-name').value.trim() || p.name,
+          age: $('#m-age').value ? Number($('#m-age').value) : null,
+          city: $('#m-city').value.trim(),
+          phone: $('#m-phone').value.trim(),
+          group: $('#m-group').value,
+          editors: Array.from(modalSelected),
+          actions: $('#m-actions').value.trim(),
+          notes: $('#m-notes').value.trim(),
+          results: $('#m-results').value.trim(),
+          photo: modalPhotoDataUrl || null,
+        });
+        closeModal();
+        toast('Промените са запазени');
+      }catch(e){
+        console.error(e);
+        toast('Грешка при запис');
+      }
+      $('#modalSave').disabled = false;
+      $('#modalSave').textContent = 'Запази промените';
+    };
+    $('#modalDelete').onclick = async function(){
+      if(!confirm('Да изтрия ли този профил?')) return;
+      await deleteParticipant(id);
+      closeModal();
+    };
+
+    $('#modalOverlay').classList.add('active');
+  }
+  function closeModal(){ $('#modalOverlay').classList.remove('active'); modalId = null; }
+  $('#modalClose').addEventListener('click', closeModal);
+  $('#modalOverlay').addEventListener('click', function(e){ if(e.target === this) closeModal(); });
+
+  // ---------- Dashboard ----------
+  function donutSvg(data, size){
+    size = size || 116;
+    const r = size/2 - 10;
+    const c = size/2;
+    const circumference = 2 * Math.PI * r;
+    const total = data.reduce((s,d)=>s+d.value,0) || 1;
+    let offsetAcc = 0;
+    let circles = '';
+    data.forEach((d)=>{
+      const frac = d.value / total;
+      const len = frac * circumference;
+      circles += '<circle cx="'+c+'" cy="'+c+'" r="'+r+'" fill="none" stroke="'+d.color+'" stroke-width="14" '+
+        'stroke-dasharray="'+len+' '+(circumference-len)+'" stroke-dashoffset="'+(-offsetAcc)+'" transform="rotate(-90 '+c+' '+c+')" stroke-linecap="butt"></circle>';
+      offsetAcc += len;
+    });
+    return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">'+
+      '<circle cx="'+c+'" cy="'+c+'" r="'+r+'" fill="none" stroke="rgba(242,240,232,0.06)" stroke-width="14"></circle>'+
+      circles+
+      '<text x="'+c+'" y="'+(c+5)+'" text-anchor="middle" font-family="Oswald, sans-serif" font-size="20" fill="#f2f0e8">'+total+'</text>'+
+    '</svg>';
+  }
+
+  function renderDonutBlock(container, groupsMap, emptyLabel){
+    const entries = Object.entries(groupsMap).sort((a,b)=>b[1]-a[1]);
+    if(entries.length === 0){
+      container.innerHTML = '<div style="color:var(--text-dim); font-size:12.5px;">'+emptyLabel+'</div>';
+      return;
+    }
+    const data = entries.map(([label,value],i)=>({label, value, color: CHART_COLORS[i % CHART_COLORS.length]}));
+    const svg = donutSvg(data);
+    const legend = data.map(d=>'<div class="row"><div class="lab"><span class="swatch" style="background:'+d.color+'"></span>'+escapeHtml(d.label)+'</div><span class="val">'+d.value+'</span></div>').join('');
+    container.innerHTML = '<div>'+svg+'</div><div class="legend">'+legend+'</div>';
+  }
+
+  function renderDashboard(){
+    const total = participants.length;
+    const ages = participants.map(p=>p.age).filter(a=>typeof a === 'number' && !isNaN(a));
+    const avgAge = ages.length ? (ages.reduce((a,b)=>a+b,0)/ages.length).toFixed(1) : '—';
+    const citiesCount = new Set(participants.map(p=>p.city).filter(Boolean)).size;
+    const activeEditors = new Set();
+    participants.forEach(p=> (p.editors||[]).forEach(e=>activeEditors.add(e)));
+
+    $('#statRow').innerHTML = [
+      {num: total, lbl:'Общо участници'},
+      {num: avgAge, lbl:'Средна възраст'},
+      {num: activeEditors.size, lbl:'Активни редактори'},
+      {num: citiesCount, lbl:'Градове'},
+    ].map(s=>'<div class="card stat-tile"><div class="num">'+s.num+'</div><div class="lbl">'+s.lbl+'</div></div>').join('');
+
+    const byGroup = {};
+    participants.forEach(p=>{
+      const key = p.group && GROUPS[p.group] ? GROUPS[p.group].label + ' (' + GROUPS[p.group].range + ')' : 'Без група';
+      byGroup[key] = (byGroup[key]||0) + 1;
+    });
+    renderDonutBlock($('#donutGroup'), byGroup, 'Няма данни за групи все още');
+
+    const byEditor = {};
+    participants.forEach(p=>{
+      const list = (p.editors && p.editors.length) ? p.editors : ['Незачислени'];
+      list.forEach(e=> byEditor[e] = (byEditor[e]||0) + 1);
+    });
+    renderDonutBlock($('#donutEditor'), byEditor, 'Няма зачислени редактори все още');
+
+    const byCityRaw = {};
+    participants.forEach(p=>{
+      const key = p.city || 'Без град';
+      byCityRaw[key] = (byCityRaw[key]||0) + 1;
+    });
+    const cityEntries = Object.entries(byCityRaw).sort((a,b)=>b[1]-a[1]);
+    const byCity = {};
+    cityEntries.slice(0,6).forEach(([k,v])=> byCity[k]=v);
+    if(cityEntries.length > 6){
+      const rest = cityEntries.slice(6).reduce((s,[,v])=>s+v,0);
+      byCity['Други'] = rest;
+    }
+    renderDonutBlock($('#donutCity'), byCity, 'Няма данни за градове все още');
+  }
+
+  // ---------- Tabs ----------
+  $$('nav.tabs button').forEach(btn=>{
+    btn.addEventListener('click', function(){
+      $$('nav.tabs button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      $$('.view').forEach(v=>v.classList.remove('active'));
+      $('#view-'+btn.getAttribute('data-view')).classList.add('active');
+      if(btn.getAttribute('data-view') === 'dashboard') renderDashboard();
+      if(btn.getAttribute('data-view') === 'table') renderTable();
+    });
+  });
+
+  renderEditorChooser();
+})();
+</script>
+</body>
+</html>
