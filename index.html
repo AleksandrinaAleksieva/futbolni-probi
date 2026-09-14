@@ -346,11 +346,15 @@
 
       <div class="card field-panel">
         <div class="name-row">
+          <div class="field" style="width:100px">
+            <label>ID</label>
+            <input type="text" id="f-id" placeholder="напр. 014">
+          </div>
           <div class="field" style="flex:1">
             <label>Име <span class="req">*</span></label>
             <input type="text" id="f-name" placeholder="Име и фамилия">
           </div>
-          <div class="field" style="width:150px">
+          <div class="field" style="width:130px">
             <label>Възраст</label>
             <input type="number" id="f-age" min="5" max="25" placeholder="напр. 12">
           </div>
@@ -442,6 +446,7 @@
       <table class="roster">
         <thead>
           <tr>
+            <th data-sort="pid">ID <span class="arrow"></span></th>
             <th data-sort="name">Име <span class="arrow"></span></th>
             <th data-sort="age">Възраст <span class="arrow"></span></th>
             <th data-sort="city">Град <span class="arrow"></span></th>
@@ -707,6 +712,7 @@
 
   // ---------- Save new profile ----------
   function resetForm(){
+    $('#f-id').value = '';
     $('#f-name').value = '';
     $('#f-age').value = '';
     $('#f-city').value = '';
@@ -746,6 +752,7 @@
     $('#saveBtn').textContent = 'Записване...';
     try{
       await db.collection('participants').add({
+        pid: $('#f-id').value.trim(),
         name: name,
         age: $('#f-age').value ? Number($('#f-age').value) : null,
         city: $('#f-city').value.trim(),
@@ -828,6 +835,7 @@
         ? '<div class="editor-tags">'+p.editors.map(e=>'<span>'+escapeHtml(e)+'</span>').join('')+'</div>'
         : '<span style="color:var(--text-dim); font-size:12px;">—</span>';
       return '<tr data-id="'+p.id+'">'+
+        '<td>'+(escapeHtml(p.pid) || '<span style="color:var(--text-dim);">—</span>')+'</td>'+
         '<td><div class="cell-name">'+avatar+'<span>'+escapeHtml(p.name)+'</span></div></td>'+
         '<td>'+(p.age || '—')+'</td>'+
         '<td>'+(escapeHtml(p.city) || '—')+'</td>'+
@@ -892,6 +900,7 @@
     const list = getFiltered();
     if(list.length === 0){ toast('Няма данни за експорт'); return; }
     const rows = list.map(p=>({
+      'ID': p.pid || '',
       'Име': p.name || '',
       'Възраст': p.age || '',
       'Град': p.city || '',
@@ -905,7 +914,7 @@
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     ws['!cols'] = [
-      {wch:20},{wch:9},{wch:16},{wch:20},{wch:20},{wch:14},{wch:30},{wch:34},{wch:30},{wch:40}
+      {wch:8},{wch:20},{wch:9},{wch:16},{wch:20},{wch:20},{wch:14},{wch:30},{wch:34},{wch:30},{wch:40}
     ];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Участници');
@@ -931,6 +940,7 @@
           '<input type="file" id="modalPhotoInput" accept="image/*" style="display:none;">'+
         '</label>'+
         '<div style="flex:1; display:grid; grid-template-columns:1fr 1fr; gap:10px;">'+
+          '<div class="field"><label>ID</label><input type="text" id="m-id" value="'+escapeHtml(p.pid||'')+'"></div>'+
           '<div class="field"><label>Име</label><input type="text" id="m-name" value="'+escapeHtml(p.name)+'"></div>'+
           '<div class="field"><label>Възраст</label><input type="number" id="m-age" value="'+(p.age||'')+'"></div>'+
           '<div class="field"><label>Град</label><input type="text" id="m-city" value="'+escapeHtml(p.city||'')+'"></div>'+
@@ -979,6 +989,7 @@
       $('#modalSave').textContent = 'Записване...';
       try{
         await db.collection('participants').doc(id).update({
+          pid: $('#m-id').value.trim(),
           name: $('#m-name').value.trim() || p.name,
           age: $('#m-age').value ? Number($('#m-age').value) : null,
           city: $('#m-city').value.trim(),
