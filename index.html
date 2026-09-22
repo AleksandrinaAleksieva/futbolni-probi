@@ -723,35 +723,70 @@
   }
 
   // ---------- Photo handling ----------
-  function readAndCompress(file, cb){
+  function readAndCompress(file, cb, onError){
+    if(!file.type || file.type.indexOf('image/') !== 0){
+      onError && onError('format');
+      return;
+    }
     const reader = new FileReader();
+    reader.onerror = function(){ onError && onError('read'); };
     reader.onload = function(e){
       const img = new Image();
+      img.onerror = function(){ onError && onError('decode'); };
       img.onload = function(){
-        const max = 480;
-        let w = img.width, h = img.height;
-        if(w > h){ if(w > max){ h = h * max / w; w = max; } }
-        else{ if(h > max){ w = w * max / h; h = max; } }
-        const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-        canvas.toBlob(function(blob){ cb(dataUrl, blob); }, 'image/jpeg', 0.8);
+        try{
+          const max = 480;
+          let w = img.width, h = img.height;
+          if(w > h){ if(w > max){ h = h * max / w; w = max; } }
+          else{ if(h > max){ w = w * max / h; h = max; } }
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          canvas.toBlob(function(blob){ cb(dataUrl, blob); }, 'image/jpeg', 0.8);
+        }catch(err){ onError && onError('compress'); }
       };
       img.src = e.target.result;
     };
     reader.readAsDataURL(file);
   }
 
-  $('#photoInput').addEventListener('change', function(e){
-    const file = e.target.files[0];
-    if(!file) return;
-    readAndCompress(file, function(dataUrl, blob){
-      currentPhotoDataUrl = dataUrl;
-      currentPhotoBlob = blob;
-      $('#photoDrop').innerHTML = '<img src="'+dataUrl+'" alt="Снимка на участника">';
+  function photoErrorMessage(kind){
+    if(kind === 'format') return 'Файлът не е разпознат като снимка (JPG/PNG/WEBP).';
+    if(kind === 'decode') return 'Браузърът не можа да прочете тази снимка — опитай с JPG или PNG (не HEIC).';
+    return 'Грешка при обработка на снимката — опитай отново.';
+  }
+
+  let homePhotoProcessing = false;
+  const PHOTO_DROP_EMPTY_HTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M8 6l1.4-2h5.2L16 6"/></svg><span>Качи снимка от кастинга</span><input type="file" id="photoInput" accept="image/*">';
+
+  function wireHomePhotoInput(){
+    const input = $('#photoInput');
+    if(!input) return;
+    input.addEventListener('change', function(e){
+      const file = e.target.files[0];
+      if(!file) return;
+      homePhotoProcessing = true;
+      $('#saveBtn').disabled = true;
+      $('#photoDrop').innerHTML = '<span>Качване...</span>';
+      readAndCompress(file, function(dataUrl, blob){
+        homePhotoProcessing = false;
+        $('#saveBtn').disabled = false;
+        currentPhotoDataUrl = dataUrl;
+        currentPhotoBlob = blob;
+        $('#photoDrop').innerHTML = '<img src="'+dataUrl+'" alt="Снимка на участника">';
+      }, function(kind){
+        homePhotoProcessing = false;
+        $('#saveBtn').disabled = false;
+        currentPhotoDataUrl = null;
+        currentPhotoBlob = null;
+        toast(photoErrorMessage(kind));
+        $('#photoDrop').innerHTML = PHOTO_DROP_EMPTY_HTML;
+        wireHomePhotoInput();
+      });
     });
-  });
+  }
+  wireHomePhotoInput();
 
   // ---------- Editor chooser (home form) ----------
   let selectedEditors = new Set();
@@ -805,17 +840,10 @@
     $('#f-results').value = '';
     currentPhotoDataUrl = null;
     currentPhotoBlob = null;
+    homePhotoProcessing = false;
     selectedEditors = new Set();
-    $('#photoDrop').innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M8 6l1.4-2h5.2L16 6"/></svg><span>Качи снимка от кастинга</span><input type="file" id="photoInput" accept="image/*">';
-    $('#photoInput').addEventListener('change', function(e){
-      const file = e.target.files[0];
-      if(!file) return;
-      readAndCompress(file, function(dataUrl, blob){
-        currentPhotoDataUrl = dataUrl;
-        currentPhotoBlob = blob;
-        $('#photoDrop').innerHTML = '<img src="'+dataUrl+'" alt="Снимка на участника">';
-      });
-    });
+    $('#photoDrop').innerHTML = PHOTO_DROP_EMPTY_HTML;
+    wireHomePhotoInput();
     renderEditorChooser();
   }
 
@@ -828,6 +856,11 @@
       status.textContent = 'Името е задължително';
       status.style.color = 'var(--danger)';
       $('#f-name').focus();
+      return;
+    }
+    if(homePhotoProcessing){
+      status.textContent = 'Изчакай снимката да се качи и опитай пак';
+      status.style.color = 'var(--danger)';
       return;
     }
     $('#saveBtn').disabled = true;
@@ -1156,18 +1189,35 @@
     }
     renderModalEditors();
 
+    let modalPhotoProcessing = false;
     $('#modalAvatarPreview').parentElement.addEventListener('click', ()=> $('#modalPhotoInput').click());
     $('#modalPhotoInput').addEventListener('change', function(e){
       const file = e.target.files[0];
       if(!file) return;
+      modalPhotoProcessing = true;
+      $('#modalSave').disabled = true;
+      document.getElementById('modalAvatarPreview').outerHTML = '<div id="modalAvatarPreview" style="width:84px;height:84px;border-radius:8px;background:var(--surface-2);border:1px dashed var(--line-strong); display:flex; align-items:center; justify-content:center; color:var(--text-dim); font-size:11px; text-align:center;">Качване...</div>';
       readAndCompress(file, function(dataUrl, blob){
+        modalPhotoProcessing = false;
+        $('#modalSave').disabled = false;
         modalPhotoDataUrl = dataUrl;
         modalPhotoBlob = blob;
         document.getElementById('modalAvatarPreview').outerHTML = '<img id="modalAvatarPreview" src="'+dataUrl+'" style="width:84px;height:84px;border-radius:8px;object-fit:cover;border:1px solid var(--line-strong);">';
+      }, function(kind){
+        modalPhotoProcessing = false;
+        $('#modalSave').disabled = false;
+        toast(photoErrorMessage(kind));
+        document.getElementById('modalAvatarPreview').outerHTML = p.photo
+          ? '<img id="modalAvatarPreview" src="'+p.photo+'" style="width:84px;height:84px;border-radius:8px;object-fit:cover;border:1px solid var(--line-strong);">'
+          : '<div id="modalAvatarPreview" style="width:84px;height:84px;border-radius:8px;background:var(--surface-2);border:1px dashed var(--line-strong); display:flex; align-items:center; justify-content:center; color:var(--text-dim); font-size:11px; text-align:center;">Без снимка</div>';
       });
     });
 
     $('#modalSave').onclick = async function(){
+      if(modalPhotoProcessing){
+        toast('Изчакай снимката да се качи и опитай пак');
+        return;
+      }
       $('#modalSave').disabled = true;
       $('#modalSave').textContent = 'Записване...';
       try{
