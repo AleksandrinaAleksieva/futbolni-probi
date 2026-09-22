@@ -183,6 +183,14 @@
   .filter-bar select{ width:auto; min-width:130px; }
   .filter-bar .clear-link{ font-size:12.5px; color:var(--text-dim); cursor:pointer; text-decoration:underline; white-space:nowrap; }
   .filter-bar .clear-link:hover{ color:var(--gold-soft); }
+  .filter-bar .count-pill{ margin-left:auto; }
+  .check-toggle{
+    width:22px; height:22px; border-radius:5px; border:1.5px solid var(--line-strong); background:var(--surface-2);
+    display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all .12s ease; color:transparent;
+  }
+  .check-toggle:hover{ border-color:var(--gold); }
+  .check-toggle.on{ background:var(--pitch); border-color:var(--pitch-light); color:#eafff0; }
+  .check-toggle svg{ width:13px; height:13px; }
 
   .table-scroll{ overflow-x:auto; }
   table.roster{ width:100%; border-collapse:collapse; min-width:760px; }
@@ -380,6 +388,24 @@
             <label>Телефон</label>
             <input type="tel" id="f-phone" placeholder="08xx xxx xxx">
           </div>
+          <div class="field">
+            <label>Пол</label>
+            <select id="f-sex">
+              <option value="">Избери пол</option>
+              <option value="Момче">Момче</option>
+              <option value="Момиче">Момиче</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Позиция</label>
+            <select id="f-position">
+              <option value="">Избери позиция</option>
+              <option value="Вратар">Вратар</option>
+              <option value="Защитник">Защитник</option>
+              <option value="Полузащитник">Полузащитник</option>
+              <option value="Нападател">Нападател</option>
+            </select>
+          </div>
 
           <div class="field span3">
             <label>Редактор</label>
@@ -401,8 +427,8 @@
           </div>
 
           <div class="field span3">
-            <label>Резултати</label>
-            <textarea id="f-results" placeholder="Резултат на участника от кастинга"></textarea>
+            <label>Монтаж</label>
+            <textarea id="f-results" placeholder="Монтаж на участника от кастинга"></textarea>
           </div>
         </div>
 
@@ -437,9 +463,12 @@
         <input type="text" id="searchInput" placeholder="Търси по име...">
       </div>
       <select id="filterGroup"><option value="">Всички групи</option><option value="1">Група 1</option><option value="2">Група 2</option><option value="3">Група 3</option><option value="4">Група 4</option></select>
+      <select id="filterSex"><option value="">Всички полове</option><option value="Момче">Момче</option><option value="Момиче">Момиче</option></select>
+      <select id="filterPosition"><option value="">Всички позиции</option><option value="Вратар">Вратар</option><option value="Защитник">Защитник</option><option value="Полузащитник">Полузащитник</option><option value="Нападател">Нападател</option></select>
       <select id="filterEditor"><option value="">Всички редактори</option></select>
       <select id="filterCity"><option value="">Всички градове</option></select>
       <span class="clear-link" id="clearFilters">Изчисти филтрите</span>
+      <span class="count-pill" id="filteredCount">0 от 0</span>
     </div>
 
     <div class="card table-scroll">
@@ -449,10 +478,14 @@
             <th data-sort="pid">ID <span class="arrow"></span></th>
             <th data-sort="name">Име <span class="arrow"></span></th>
             <th data-sort="age">Възраст <span class="arrow"></span></th>
+            <th data-sort="sex">Пол <span class="arrow"></span></th>
+            <th data-sort="position">Позиция <span class="arrow"></span></th>
             <th data-sort="city">Град <span class="arrow"></span></th>
             <th data-sort="group">Група <span class="arrow"></span></th>
             <th>Редактор</th>
             <th data-sort="phone">Телефон <span class="arrow"></span></th>
+            <th title="Скаути">Скаути</th>
+            <th title="Продукция">Продукция</th>
             <th></th>
           </tr>
         </thead>
@@ -718,6 +751,8 @@
     $('#f-city').value = '';
     $('#f-group').value = '';
     $('#f-phone').value = '';
+    $('#f-sex').value = '';
+    $('#f-position').value = '';
     $('#f-actions').value = '';
     $('#f-notes').value = '';
     $('#f-results').value = '';
@@ -758,7 +793,11 @@
         city: $('#f-city').value.trim(),
         group: $('#f-group').value,
         phone: $('#f-phone').value.trim(),
+        sex: $('#f-sex').value,
+        position: $('#f-position').value,
         editors: Array.from(selectedEditors),
+        scouted: false,
+        production: false,
         actions: $('#f-actions').value.trim(),
         notes: $('#f-notes').value.trim(),
         results: $('#f-results').value.trim(),
@@ -799,11 +838,15 @@
   function getFiltered(){
     const q = $('#searchInput').value.trim().toLowerCase();
     const g = $('#filterGroup').value;
+    const sex = $('#filterSex').value;
+    const pos = $('#filterPosition').value;
     const ed = $('#filterEditor').value;
     const city = $('#filterCity').value;
     let list = participants.filter(p=>{
       if(q && !(p.name||'').toLowerCase().includes(q)) return false;
       if(g && p.group !== g) return false;
+      if(sex && p.sex !== sex) return false;
+      if(pos && p.position !== pos) return false;
       if(ed && !(p.editors||[]).includes(ed)) return false;
       if(city && p.city !== city) return false;
       return true;
@@ -819,10 +862,15 @@
     return list;
   }
 
+  function checkToggleSvg(){
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l5 5L20 6"/></svg>';
+  }
+
   function renderTable(){
     const list = getFiltered();
     const body = $('#rosterBody');
     $('#tableCount').textContent = participants.length + (participants.length===1 ? ' участник' : ' участници');
+    $('#filteredCount').textContent = list.length + ' от ' + participants.length;
     $('#emptyState').style.display = list.length ? 'none' : 'block';
     $('table.roster').style.display = list.length ? '' : 'none';
     body.innerHTML = list.map(p=>{
@@ -838,10 +886,14 @@
         '<td>'+(escapeHtml(p.pid) || '<span style="color:var(--text-dim);">—</span>')+'</td>'+
         '<td><div class="cell-name">'+avatar+'<span>'+escapeHtml(p.name)+'</span></div></td>'+
         '<td>'+(p.age || '—')+'</td>'+
+        '<td>'+(escapeHtml(p.sex) || '—')+'</td>'+
+        '<td>'+(escapeHtml(p.position) || '—')+'</td>'+
         '<td>'+(escapeHtml(p.city) || '—')+'</td>'+
         '<td>'+groupBadge+'</td>'+
         '<td>'+editorTags+'</td>'+
         '<td>'+(escapeHtml(p.phone) || '—')+'</td>'+
+        '<td><div class="check-toggle'+(p.scouted?' on':'')+'" data-act="toggle-scouted" title="Скаути">'+checkToggleSvg()+'</div></td>'+
+        '<td><div class="check-toggle'+(p.production?' on':'')+'" data-act="toggle-production" title="Продукция">'+checkToggleSvg()+'</div></td>'+
         '<td><div class="row-actions">'+
           '<button class="icon-btn" data-act="view" title="Виж"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></button>'+
           '<button class="icon-btn danger" data-act="del" title="Изтрий"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>'+
@@ -860,9 +912,33 @@
           }
           return;
         }
+        if(act && act.getAttribute('data-act') === 'toggle-scouted'){
+          e.stopPropagation();
+          toggleField(id, 'scouted', act);
+          return;
+        }
+        if(act && act.getAttribute('data-act') === 'toggle-production'){
+          e.stopPropagation();
+          toggleField(id, 'production', act);
+          return;
+        }
         openModal(id);
       });
     });
+  }
+
+  async function toggleField(id, field, el){
+    const p = participants.find(x=>x.id===id);
+    if(!p) return;
+    const next = !p[field];
+    el.classList.toggle('on', next);
+    try{
+      await db.collection('participants').doc(id).update({ [field]: next });
+    }catch(e){
+      console.error(e);
+      el.classList.toggle('on', !next);
+      toast('Грешка при запис');
+    }
   }
 
   async function deleteParticipant(id){
@@ -886,10 +962,12 @@
   });
 
   ['searchInput'].forEach(id => $('#'+id).addEventListener('input', renderTable));
-  ['filterGroup','filterEditor','filterCity'].forEach(id => $('#'+id).addEventListener('change', renderTable));
+  ['filterGroup','filterSex','filterPosition','filterEditor','filterCity'].forEach(id => $('#'+id).addEventListener('change', renderTable));
   $('#clearFilters').addEventListener('click', function(){
     $('#searchInput').value = '';
     $('#filterGroup').value = '';
+    $('#filterSex').value = '';
+    $('#filterPosition').value = '';
     $('#filterEditor').value = '';
     $('#filterCity').value = '';
     renderTable();
@@ -903,18 +981,22 @@
       'ID': p.pid || '',
       'Име': p.name || '',
       'Възраст': p.age || '',
+      'Пол': p.sex || '',
+      'Позиция': p.position || '',
       'Град': p.city || '',
       'Група': GROUPS[p.group] ? (GROUPS[p.group].label + ' (' + GROUPS[p.group].range + ')') : '',
       'Редактор': (p.editors||[]).join(', '),
       'Телефон': p.phone || '',
+      'Скаути': p.scouted ? 'Да' : '',
+      'Продукция': p.production ? 'Да' : '',
       'Действия': p.actions || '',
       'Бележки': p.notes || '',
-      'Резултати': p.results || '',
+      'Монтаж': p.results || '',
       'Снимка (URL)': p.photo || '',
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     ws['!cols'] = [
-      {wch:8},{wch:20},{wch:9},{wch:16},{wch:20},{wch:20},{wch:14},{wch:30},{wch:34},{wch:30},{wch:40}
+      {wch:8},{wch:20},{wch:9},{wch:10},{wch:16},{wch:16},{wch:20},{wch:20},{wch:14},{wch:9},{wch:11},{wch:30},{wch:34},{wch:30},{wch:40}
     ];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Участници');
@@ -945,6 +1027,15 @@
           '<div class="field"><label>Възраст</label><input type="number" id="m-age" value="'+(p.age||'')+'"></div>'+
           '<div class="field"><label>Град</label><input type="text" id="m-city" value="'+escapeHtml(p.city||'')+'"></div>'+
           '<div class="field"><label>Телефон</label><input type="tel" id="m-phone" value="'+escapeHtml(p.phone||'')+'"></div>'+
+          '<div class="field"><label>Пол</label><select id="m-sex">'+
+            '<option value="">Избери пол</option>'+
+            '<option value="Момче" '+(p.sex==='Момче'?'selected':'')+'>Момче</option>'+
+            '<option value="Момиче" '+(p.sex==='Момиче'?'selected':'')+'>Момиче</option>'+
+          '</select></div>'+
+          '<div class="field"><label>Позиция</label><select id="m-position">'+
+            '<option value="">Избери позиция</option>'+
+            ['Вратар','Защитник','Полузащитник','Нападател'].map(v=>'<option value="'+v+'" '+(p.position===v?'selected':'')+'>'+v+'</option>').join('')+
+          '</select></div>'+
         '</div>'+
       '</div>'+
       '<div class="field" style="margin-bottom:14px;"><label>Група</label><select id="m-group">'+
@@ -952,9 +1043,13 @@
         Object.keys(GROUPS).map(k=>'<option value="'+k+'" '+(g===k?'selected':'')+'>'+GROUPS[k].label+' · '+GROUPS[k].range+'</option>').join('')+
       '</select></div>'+
       '<div class="field" style="margin-bottom:14px;"><label>Редактор</label><div class="editor-chooser" id="modalEditorChooser"></div></div>'+
+      '<div style="display:flex; gap:24px; margin-bottom:14px;">'+
+        '<label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; color:var(--text-muted);"><input type="checkbox" id="m-scouted" '+(p.scouted?'checked':'')+' style="width:16px;height:16px;"> Скаути</label>'+
+        '<label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; color:var(--text-muted);"><input type="checkbox" id="m-production" '+(p.production?'checked':'')+' style="width:16px;height:16px;"> Продукция</label>'+
+      '</div>'+
       '<div class="field" style="margin-bottom:14px;"><label>Действия</label><textarea id="m-actions">'+escapeHtml(p.actions||'')+'</textarea></div>'+
       '<div class="field" style="margin-bottom:14px;"><label>Бележки</label><textarea id="m-notes">'+escapeHtml(p.notes||'')+'</textarea></div>'+
-      '<div class="field"><label>Резултати</label><textarea id="m-results">'+escapeHtml(p.results||'')+'</textarea></div>';
+      '<div class="field"><label>Монтаж</label><textarea id="m-results">'+escapeHtml(p.results||'')+'</textarea></div>';
 
     let modalSelected = new Set(p.editors||[]);
     function renderModalEditors(){
@@ -994,8 +1089,12 @@
           age: $('#m-age').value ? Number($('#m-age').value) : null,
           city: $('#m-city').value.trim(),
           phone: $('#m-phone').value.trim(),
+          sex: $('#m-sex').value,
+          position: $('#m-position').value,
           group: $('#m-group').value,
           editors: Array.from(modalSelected),
+          scouted: $('#m-scouted').checked,
+          production: $('#m-production').checked,
           actions: $('#m-actions').value.trim(),
           notes: $('#m-notes').value.trim(),
           results: $('#m-results').value.trim(),
