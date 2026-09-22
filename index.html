@@ -201,6 +201,16 @@
   }
   table.roster thead th:hover{ color:var(--gold-soft); }
   table.roster thead th .arrow{ margin-left:4px; opacity:.6; font-size:10px; }
+  table.roster thead th[draggable="true"]{ cursor:grab; }
+  table.roster thead th.col-dragging{ opacity:.4; cursor:grabbing; }
+  table.roster thead th.col-drop-before{ box-shadow: inset 3px 0 0 0 var(--gold); }
+  table.roster thead th.col-drop-after{ box-shadow: inset -3px 0 0 0 var(--gold); }
+  table.roster thead th.col-fixed{ cursor:default; }
+  .column-hint{
+    display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    font-size:11.5px; color:var(--text-dim); margin-bottom:10px; padding:0 2px;
+  }
+  .column-hint .clear-link{ font-size:11.5px; }
   table.roster tbody tr{ border-bottom:1px solid var(--line); cursor:pointer; transition:background .1s ease; }
   table.roster tbody tr:hover{ background:var(--surface-2); }
   table.roster td{ padding:10px 14px; font-size:13.5px; vertical-align:middle; }
@@ -471,23 +481,15 @@
       <span class="count-pill" id="filteredCount">0 от 0</span>
     </div>
 
+    <div class="column-hint">
+      <span>Плъзни заглавие на колона, за да пренаредиш таблицата — подредбата се пази само в твоя браузър</span>
+      <span class="clear-link" id="resetColumns">Нулирай подредбата</span>
+    </div>
+
     <div class="card table-scroll">
       <table class="roster">
         <thead>
-          <tr>
-            <th data-sort="pid">ID <span class="arrow"></span></th>
-            <th data-sort="name">Име <span class="arrow"></span></th>
-            <th data-sort="age">Възраст <span class="arrow"></span></th>
-            <th data-sort="sex">Пол <span class="arrow"></span></th>
-            <th data-sort="position">Позиция <span class="arrow"></span></th>
-            <th data-sort="city">Град <span class="arrow"></span></th>
-            <th data-sort="group">Група <span class="arrow"></span></th>
-            <th>Редактор</th>
-            <th data-sort="phone">Телефон <span class="arrow"></span></th>
-            <th title="Скаути">Скаути</th>
-            <th title="Продукция">Продукция</th>
-            <th></th>
-          </tr>
+          <tr id="rosterHeadRow"></tr>
         </thead>
         <tbody id="rosterBody"></tbody>
       </table>
@@ -589,9 +591,54 @@
   let modalPhotoBlob = null;
   let unsubParticipants = null;
   let unsubEditors = null;
+  let draggedCol = null;
 
   const $ = (sel, root) => (root||document).querySelector(sel);
   const $$ = (sel, root) => Array.from((root||document).querySelectorAll(sel));
+
+  // ---------- Roster columns (order is a per-browser preference) ----------
+  const DEFAULT_COLUMN_ORDER = ['pid','name','age','sex','position','city','group','editors','phone','scouted','production'];
+  const COLUMN_DEFS = {
+    pid:        { label:'ID', sortKey:'pid', cell: p => escapeHtml(p.pid) || '<span style="color:var(--text-dim);">—</span>' },
+    name:       { label:'Име', sortKey:'name', cell: p => {
+                    const avatar = p.photo
+                      ? '<img class="avatar" src="'+p.photo+'" alt="">'
+                      : '<div class="avatar placeholder">'+escapeHtml((p.name||'?').charAt(0).toUpperCase())+'</div>';
+                    return '<div class="cell-name">'+avatar+'<span>'+escapeHtml(p.name)+'</span></div>';
+                  } },
+    age:        { label:'Възраст', sortKey:'age', cell: p => (p.age || '—') },
+    sex:        { label:'Пол', sortKey:'sex', cell: p => escapeHtml(p.sex) || '—' },
+    position:   { label:'Позиция', sortKey:'position', cell: p => escapeHtml(p.position) || '—' },
+    city:       { label:'Град', sortKey:'city', cell: p => escapeHtml(p.city) || '—' },
+    group:      { label:'Група', sortKey:'group', cell: p => {
+                    const g = GROUPS[p.group];
+                    return g ? '<span class="badge-group '+g.cls+'">'+g.label+'</span>' : '<span style="color:var(--text-dim); font-size:12px;">—</span>';
+                  } },
+    editors:    { label:'Редактор', sortKey:null, cell: p => (p.editors||[]).length
+                    ? '<div class="editor-tags">'+p.editors.map(e=>'<span>'+escapeHtml(e)+'</span>').join('')+'</div>'
+                    : '<span style="color:var(--text-dim); font-size:12px;">—</span>' },
+    phone:      { label:'Телефон', sortKey:'phone', cell: p => escapeHtml(p.phone) || '—' },
+    scouted:    { label:'Скаути', sortKey:null, cell: p => '<div class="check-toggle'+(p.scouted?' on':'')+'" data-act="toggle-scouted" title="Скаути">'+checkToggleSvg()+'</div>' },
+    production: { label:'Продукция', sortKey:null, cell: p => '<div class="check-toggle'+(p.production?' on':'')+'" data-act="toggle-production" title="Продукция">'+checkToggleSvg()+'</div>' },
+  };
+
+  function loadColumnOrder(){
+    try{
+      const raw = localStorage.getItem('futbolniProbiColumnOrder');
+      if(raw){
+        const arr = JSON.parse(raw);
+        if(Array.isArray(arr) && arr.length === DEFAULT_COLUMN_ORDER.length && DEFAULT_COLUMN_ORDER.every(k=>arr.includes(k))){
+          return arr;
+        }
+      }
+    }catch(e){ /* private browsing or blocked storage — fall back silently */ }
+    return DEFAULT_COLUMN_ORDER.slice();
+  }
+  function saveColumnOrder(){
+    try{ localStorage.setItem('futbolniProbiColumnOrder', JSON.stringify(columnOrder)); }
+    catch(e){ /* ignore — order just won't persist for this viewer */ }
+  }
+  let columnOrder = loadColumnOrder();
 
   function toast(msg){
     const t = $('#toast');
@@ -866,6 +913,66 @@
     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l5 5L20 6"/></svg>';
   }
 
+  function renderHead(){
+    const tr = $('#rosterHeadRow');
+    tr.innerHTML = columnOrder.map(key=>{
+      const col = COLUMN_DEFS[key];
+      const sortAttr = col.sortKey ? ' data-sort="'+col.sortKey+'"' : '';
+      return '<th draggable="true" data-col="'+key+'"'+sortAttr+'>'+col.label+(col.sortKey ? ' <span class="arrow"></span>' : '')+'</th>';
+    }).join('') + '<th class="col-fixed"></th>';
+
+    $$('#rosterHeadRow th[data-col]').forEach(th=>{
+      if(th.hasAttribute('data-sort')){
+        th.addEventListener('click', function(){
+          if(draggedCol) return; // ignore stray click right after a drag
+          const key = th.getAttribute('data-sort');
+          if(sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = 1; }
+          $$('#rosterHeadRow th .arrow').forEach(a=> a.textContent = '');
+          const arrow = th.querySelector('.arrow');
+          if(arrow) arrow.textContent = sortDir === 1 ? '▲' : '▼';
+          renderTable();
+        });
+      }
+      th.addEventListener('dragstart', function(e){
+        draggedCol = th.getAttribute('data-col');
+        th.classList.add('col-dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        try{ e.dataTransfer.setData('text/plain', draggedCol); }catch(err){}
+      });
+      th.addEventListener('dragend', function(){
+        th.classList.remove('col-dragging');
+        $$('#rosterHeadRow th').forEach(t=> t.classList.remove('col-drop-before','col-drop-after'));
+        draggedCol = null;
+      });
+      th.addEventListener('dragover', function(e){
+        if(!draggedCol || draggedCol === th.getAttribute('data-col')) return;
+        e.preventDefault();
+        const rect = th.getBoundingClientRect();
+        const before = (e.clientX - rect.left) < rect.width / 2;
+        $$('#rosterHeadRow th').forEach(t=> t.classList.remove('col-drop-before','col-drop-after'));
+        th.classList.add(before ? 'col-drop-before' : 'col-drop-after');
+      });
+      th.addEventListener('drop', function(e){
+        e.preventDefault();
+        const targetCol = th.getAttribute('data-col');
+        const moving = draggedCol;
+        if(!moving || moving === targetCol) return;
+        const rect = th.getBoundingClientRect();
+        const before = (e.clientX - rect.left) < rect.width / 2;
+        columnOrder = columnOrder.filter(k=>k!==moving);
+        let idx = columnOrder.indexOf(targetCol);
+        if(!before) idx += 1;
+        columnOrder.splice(idx, 0, moving);
+        saveColumnOrder();
+        renderHead();
+        renderTable();
+      });
+    });
+
+    const activeTh = document.querySelector('#rosterHeadRow th[data-sort="'+sortKey+'"]');
+    if(activeTh){ const a = activeTh.querySelector('.arrow'); if(a) a.textContent = sortDir === 1 ? '▲' : '▼'; }
+  }
+
   function renderTable(){
     const list = getFiltered();
     const body = $('#rosterBody');
@@ -874,31 +981,12 @@
     $('#emptyState').style.display = list.length ? 'none' : 'block';
     $('table.roster').style.display = list.length ? '' : 'none';
     body.innerHTML = list.map(p=>{
-      const g = GROUPS[p.group];
-      const avatar = p.photo
-        ? '<img class="avatar" src="'+p.photo+'" alt="">'
-        : '<div class="avatar placeholder">'+escapeHtml((p.name||'?').charAt(0).toUpperCase())+'</div>';
-      const groupBadge = g ? '<span class="badge-group '+g.cls+'">'+g.label+'</span>' : '<span style="color:var(--text-dim); font-size:12px;">—</span>';
-      const editorTags = (p.editors||[]).length
-        ? '<div class="editor-tags">'+p.editors.map(e=>'<span>'+escapeHtml(e)+'</span>').join('')+'</div>'
-        : '<span style="color:var(--text-dim); font-size:12px;">—</span>';
-      return '<tr data-id="'+p.id+'">'+
-        '<td>'+(escapeHtml(p.pid) || '<span style="color:var(--text-dim);">—</span>')+'</td>'+
-        '<td><div class="cell-name">'+avatar+'<span>'+escapeHtml(p.name)+'</span></div></td>'+
-        '<td>'+(p.age || '—')+'</td>'+
-        '<td>'+(escapeHtml(p.sex) || '—')+'</td>'+
-        '<td>'+(escapeHtml(p.position) || '—')+'</td>'+
-        '<td>'+(escapeHtml(p.city) || '—')+'</td>'+
-        '<td>'+groupBadge+'</td>'+
-        '<td>'+editorTags+'</td>'+
-        '<td>'+(escapeHtml(p.phone) || '—')+'</td>'+
-        '<td><div class="check-toggle'+(p.scouted?' on':'')+'" data-act="toggle-scouted" title="Скаути">'+checkToggleSvg()+'</div></td>'+
-        '<td><div class="check-toggle'+(p.production?' on':'')+'" data-act="toggle-production" title="Продукция">'+checkToggleSvg()+'</div></td>'+
-        '<td><div class="row-actions">'+
+      const cells = columnOrder.map(key => '<td>'+COLUMN_DEFS[key].cell(p)+'</td>').join('');
+      const actionsCell = '<td><div class="row-actions">'+
           '<button class="icon-btn" data-act="view" title="Виж"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></button>'+
           '<button class="icon-btn danger" data-act="del" title="Изтрий"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>'+
-        '</div></td>'+
-      '</tr>';
+        '</div></td>';
+      return '<tr data-id="'+p.id+'">'+cells+actionsCell+'</tr>';
     }).join('');
 
     $$('#rosterBody tr').forEach(tr=>{
@@ -951,15 +1039,15 @@
     }
   }
 
-  $$('table.roster thead th[data-sort]').forEach(th=>{
-    th.addEventListener('click', function(){
-      const key = th.getAttribute('data-sort');
-      if(sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = 1; }
-      $$('table.roster thead th').forEach(t=> t.querySelector('.arrow') && (t.querySelector('.arrow').textContent=''));
-      th.querySelector('.arrow').textContent = sortDir === 1 ? '▲' : '▼';
-      renderTable();
-    });
+  $('#resetColumns').addEventListener('click', function(){
+    columnOrder = DEFAULT_COLUMN_ORDER.slice();
+    saveColumnOrder();
+    renderHead();
+    renderTable();
+    toast('Подредбата на колоните е нулирана');
   });
+
+  renderHead();
 
   ['searchInput'].forEach(id => $('#'+id).addEventListener('input', renderTable));
   ['filterGroup','filterSex','filterPosition','filterEditor','filterCity'].forEach(id => $('#'+id).addEventListener('change', renderTable));
